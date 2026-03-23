@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ATS Resume Checker</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a0f; --surface: #111118; --card: #16161f; --border: #2a2a3a;
+      --accent: #7c6fff; --accent2: #ff6f91; --accent3: #6fffc4;
+      --text: #e8e8f0; --muted: #7a7a9a;
+      --success: #6fffc4; --warning: #ffcc6f; --danger: #ff6f6f;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; overflow-x:hidden; }
+    body::before {
+      content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+      background-image: linear-gradient(rgba(124,111,255,.03) 1px,transparent 1px), linear-gradient(90deg,rgba(124,111,255,.03) 1px,transparent 1px);
+      background-size:40px 40px;
+    }
+    .container { max-width:960px; margin:0 auto; padding:40px 24px; position:relative; z-index:1; }
+    header { text-align:center; margin-bottom:48px; }
+    .badge { display:inline-block; background:rgba(124,111,255,.12); border:1px solid rgba(124,111,255,.3); color:var(--accent); font-family:'DM Mono',monospace; font-size:11px; letter-spacing:2px; text-transform:uppercase; padding:6px 16px; border-radius:100px; margin-bottom:20px; }
+    h1 { font-family:'Syne',sans-serif; font-size:clamp(2.4rem,5vw,3.8rem); font-weight:800; line-height:1.1; letter-spacing:-1px; }
+    h1 span { background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+    .subtitle { color:var(--muted); margin-top:14px; font-size:1.05rem; font-weight:300; }
+
+    .upload-card { background:var(--card); border:1px solid var(--border); border-radius:20px; padding:36px; margin-bottom:28px; }
+
+    /* Tab switcher */
+    .input-tabs { display:flex; gap:8px; margin-bottom:24px; }
+    .tab-btn {
+      flex:1; padding:11px; border-radius:10px; border:1px solid var(--border);
+      background:transparent; color:var(--muted); font-family:'Syne',sans-serif;
+      font-size:.85rem; font-weight:600; cursor:pointer; transition:all .2s;
+    }
+    .tab-btn.active { background:rgba(124,111,255,.12); border-color:var(--accent); color:var(--accent); }
+
+    /* Upload zone */
+    .upload-zone { border:2px dashed var(--border); border-radius:14px; padding:50px 32px; text-align:center; cursor:pointer; transition:all .25s; }
+    .upload-zone:hover,.upload-zone.drag-over { border-color:var(--accent); background:rgba(124,111,255,.05); }
+    .upload-icon { width:60px; height:60px; background:rgba(124,111,255,.1); border-radius:14px; display:inline-flex; align-items:center; justify-content:center; margin-bottom:14px; font-size:26px; }
+    .upload-text { font-family:'Syne',sans-serif; font-size:1.05rem; font-weight:600; margin-bottom:6px; }
+    .upload-sub { color:var(--muted); font-size:.84rem; }
+    #fileInput { display:none; }
+    .file-selected { display:none; align-items:center; gap:12px; background:rgba(111,255,196,.06); border:1px solid rgba(111,255,196,.2); border-radius:10px; padding:13px 18px; margin-top:16px; }
+    .file-selected.show { display:flex; }
+    .file-name { font-family:'DM Mono',monospace; font-size:.85rem; color:var(--accent3); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .remove-file { background:none; border:none; color:var(--muted); cursor:pointer; font-size:18px; }
+    .remove-file:hover { color:var(--danger); }
+
+    /* Paste zone */
+    .paste-zone { display:none; }
+    .paste-zone.active { display:block; }
+    .paste-hint { font-size:.82rem; color:var(--muted); margin-bottom:10px; }
+    .paste-hint span { color:var(--accent3); }
+
+    label { display:block; font-size:.8rem; font-weight:500; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:9px; }
+    textarea { width:100%; background:var(--surface); border:1px solid var(--border); border-radius:12px; color:var(--text); font-family:'DM Sans',sans-serif; font-size:.92rem; padding:14px; resize:vertical; outline:none; transition:border-color .2s; }
+    textarea:focus { border-color:var(--accent); }
+    textarea::placeholder { color:var(--muted); }
+
+    .jd-section { margin-top:22px; }
+    .error-msg { background:rgba(255,111,111,.08); border:1px solid rgba(255,111,111,.25); border-radius:12px; padding:14px 18px; color:var(--danger); font-size:.88rem; margin-top:14px; display:none; }
+    .error-msg.show { display:block; }
+
+    .btn-analyze { width:100%; margin-top:24px; background:linear-gradient(135deg,var(--accent),var(--accent2)); border:none; border-radius:12px; color:#fff; font-family:'Syne',sans-serif; font-size:1rem; font-weight:700; padding:17px; cursor:pointer; transition:opacity .2s,transform .15s; }
+    .btn-analyze:hover { opacity:.9; transform:translateY(-1px); }
+    .btn-analyze:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+    .btn-analyze .spinner { display:none; width:18px; height:18px; border:2px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .6s linear infinite; margin:0 auto; }
+    .btn-analyze.loading .btn-text { display:none; }
+    .btn-analyze.loading .spinner { display:block; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* Results */
+    #results { display:none; animation:fadeUp .5s ease; }
+    #results.show { display:block; }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+
+    .score-card { background:var(--card); border:1px solid var(--border); border-radius:20px; padding:36px; margin-bottom:20px; display:flex; align-items:center; gap:36px; flex-wrap:wrap; }
+    .score-ring { position:relative; width:150px; height:150px; flex-shrink:0; }
+    .score-ring svg { width:100%; height:100%; transform:rotate(-90deg); }
+    .score-ring .track { fill:none; stroke:var(--border); stroke-width:10; }
+    .score-ring .fill { fill:none; stroke-width:10; stroke-linecap:round; stroke-dasharray:408; stroke-dashoffset:408; transition:stroke-dashoffset 1.5s cubic-bezier(.4,0,.2,1); }
+    .score-label { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+    .score-num { font-family:'Syne',sans-serif; font-size:2.6rem; font-weight:800; line-height:1; }
+    .score-pct { font-size:.78rem; color:var(--muted); margin-top:2px; }
+    .score-info { flex:1; min-width:200px; }
+    .score-grade { font-family:'Syne',sans-serif; font-size:1.7rem; font-weight:800; margin-bottom:8px; }
+    .score-desc { color:var(--muted); font-size:.93rem; line-height:1.6; }
+
+    .stats-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-bottom:20px; }
+    .stat-box { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:18px; text-align:center; }
+    .stat-value { font-family:'Syne',sans-serif; font-size:1.7rem; font-weight:800; margin-bottom:4px; }
+    .stat-label { font-size:.76rem; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; }
+
+    .section-scores { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:24px; margin-bottom:20px; }
+    .section-scores h3 { font-family:'Syne',sans-serif; font-size:.95rem; font-weight:700; margin-bottom:18px; }
+    .score-bar-item { margin-bottom:14px; }
+    .score-bar-header { display:flex; justify-content:space-between; margin-bottom:5px; }
+    .score-bar-name { font-size:.86rem; font-weight:500; }
+    .score-bar-val { font-family:'DM Mono',monospace; font-size:.78rem; color:var(--muted); }
+    .score-bar-track { height:6px; background:var(--border); border-radius:100px; overflow:hidden; }
+    .score-bar-fill { height:100%; border-radius:100px; width:0; transition:width 1.2s cubic-bezier(.4,0,.2,1); }
+
+    .detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+    @media(max-width:600px){.detail-grid{grid-template-columns:1fr}}
+    .detail-card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:22px; }
+    .detail-card h3 { font-family:'Syne',sans-serif; font-size:.85rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; margin-bottom:14px; }
+    .tag-list { display:flex; flex-wrap:wrap; gap:7px; }
+    .tag { font-family:'DM Mono',monospace; font-size:.73rem; padding:4px 11px; border-radius:100px; border:1px solid; }
+    .tag.found  { color:var(--accent3); border-color:rgba(111,255,196,.3); background:rgba(111,255,196,.06); }
+    .tag.missing{ color:var(--danger);  border-color:rgba(255,111,111,.3); background:rgba(255,111,111,.06); }
+
+    .improvements-card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:26px; margin-bottom:20px; }
+    .improvements-card h3 { font-family:'Syne',sans-serif; font-size:.95rem; font-weight:700; margin-bottom:18px; }
+    .improvement-item { display:flex; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); }
+    .improvement-item:last-child { border-bottom:none; }
+    .imp-num { font-family:'DM Mono',monospace; font-size:.73rem; color:var(--accent); background:rgba(124,111,255,.1); border:1px solid rgba(124,111,255,.2); border-radius:6px; width:26px; height:26px; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
+    .imp-text { font-size:.9rem; line-height:1.6; }
+
+    .history-section { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:26px; margin-top:36px; }
+    .history-section h3 { font-family:'Syne',sans-serif; font-size:.95rem; font-weight:700; margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; }
+    .history-table { width:100%; border-collapse:collapse; font-size:.84rem; }
+    .history-table th { text-align:left; color:var(--muted); font-size:.73rem; text-transform:uppercase; letter-spacing:.8px; padding:0 10px 10px; font-weight:500; }
+    .history-table td { padding:10px; border-top:1px solid var(--border); }
+    .score-pill { display:inline-block; font-family:'DM Mono',monospace; font-size:.78rem; padding:3px 9px; border-radius:100px; font-weight:500; }
+    .pill-high { background:rgba(111,255,196,.1); color:var(--accent3); }
+    .pill-mid  { background:rgba(255,204,111,.1); color:var(--warning); }
+    .pill-low  { background:rgba(255,111,111,.1); color:var(--danger); }
+
+    .section-divider { text-align:center; color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:1.5px; margin:36px 0 24px; position:relative; }
+    .section-divider::before,.section-divider::after { content:''; position:absolute; top:50%; width:40%; height:1px; background:var(--border); }
+    .section-divider::before { left:0; } .section-divider::after { right:0; }
+    footer { text-align:center; color:var(--muted); font-size:.78rem; margin-top:50px; padding-bottom:36px; }
+    footer span { color:var(--accent); }
+
+    /* Info box */
+    .info-box { background:rgba(124,111,255,.07); border:1px solid rgba(124,111,255,.2); border-radius:12px; padding:13px 16px; font-size:.84rem; color:var(--muted); margin-bottom:20px; line-height:1.6; }
+    .info-box strong { color:var(--accent); }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="badge">⚡ Powered by AI</div>
+    <h1>ATS Resume<br><span>Checker</span></h1>
+    <p class="subtitle">Upload your resume · Get an ATS score · Improve your chances</p>
+  </header>
+
+  <div class="upload-card">
+
+    <!-- Tab switcher -->
+    <div class="input-tabs">
+      <button class="tab-btn active" id="tabUpload" onclick="switchTab('upload')">📄 Upload File</button>
+      <button class="tab-btn" id="tabPaste"  onclick="switchTab('paste')">📋 Paste Resume Text</button>
+    </div>
+
+    <!-- Upload tab -->
+    <div id="uploadZoneWrap">
+      <div class="upload-zone" id="uploadZone">
+        <div class="upload-icon">📄</div>
+        <div class="upload-text">Drop your resume here</div>
+        <div class="upload-sub">PDF, DOC, DOCX, TXT &middot; Max 5MB</div>
+        <input type="file" id="fileInput" accept=".pdf,.doc,.docx,.txt" />
+      </div>
+      <div class="file-selected" id="fileSelected">
+        <span>📎</span>
+        <span class="file-name" id="fileName"></span>
+        <button class="remove-file" id="removeFile">✕</button>
+      </div>
+    </div>
+
+    <!-- Paste tab -->
+    <div class="paste-zone" id="pasteZone">
+      <div class="info-box">
+        💡 <strong>PDF not being read?</strong> Open your PDF → Select All → Copy → Paste below. This gives 100% accurate results.
+      </div>
+      <label>Paste Your Resume Text</label>
+      <textarea id="resumeText" rows="10" placeholder="Paste your full resume text here...&#10;&#10;Name, contact info, experience, skills, education..."></textarea>
+    </div>
+
+    <div class="jd-section">
+      <label>Job Description (optional but recommended)</label>
+      <textarea id="jobDesc" rows="5" placeholder="Paste the job description here for keyword-matched ATS analysis..."></textarea>
+    </div>
+
+    <div class="error-msg" id="errorMsg"></div>
+
+    <button class="btn-analyze" id="analyzeBtn">
+      <span class="btn-text">⚡ Analyze My Resume</span>
+      <div class="spinner"></div>
+    </button>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+    <div class="score-card">
+      <div class="score-ring">
+        <svg viewBox="0 0 140 140">
+          <circle class="track" cx="70" cy="70" r="65"/>
+          <circle class="fill" id="scoreCircle" cx="70" cy="70" r="65"/>
+        </svg>
+        <div class="score-label">
+          <div class="score-num" id="scoreNum">0</div>
+          <div class="score-pct">/ 100</div>
+        </div>
+      </div>
+      <div class="score-info">
+        <div class="score-grade" id="scoreGrade"></div>
+        <div class="score-desc"  id="scoreDesc"></div>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-box"><div class="stat-value" id="statKeywords" style="color:var(--accent)">—</div><div class="stat-label">Keywords Matched</div></div>
+      <div class="stat-box"><div class="stat-value" id="statMissing"  style="color:var(--accent2)">—</div><div class="stat-label">Keywords Missing</div></div>
+      <div class="stat-box"><div class="stat-value" id="statSections" style="color:var(--accent3)">—</div><div class="stat-label">Sections Found</div></div>
+    </div>
+
+    <div class="section-scores">
+      <h3>📊 Section-wise Scores</h3>
+      <div id="sectionBars"></div>
+    </div>
+
+    <div class="detail-grid">
+      <div class="detail-card"><h3><span style="color:var(--accent3)">✓</span> Keywords Found</h3><div class="tag-list" id="keywordsFound"></div></div>
+      <div class="detail-card"><h3><span style="color:var(--danger)">✗</span>  Keywords Missing</h3><div class="tag-list" id="keywordsMissing"></div></div>
+    </div>
+
+    <div class="improvements-card">
+      <h3>🚀 Improvement Suggestions</h3>
+      <div id="improvementsList"></div>
+    </div>
+  </div>
+
+  <div class="section-divider">Recent Checks</div>
+  <div class="history-section">
+    <h3><span>📋 Analysis History</span><span style="font-size:.73rem;color:var(--muted);font-weight:400" id="historyCount"></span></h3>
+    <div id="historyTable"><p style="color:var(--muted);font-size:.88rem">No history yet.</p></div>
+  </div>
+
+  <footer>Built with <span>AI</span> + PHP + MySQL &middot; ATS Resume Checker</footer>
+</div>
+
+<script>
+  // ── Tab switch ────────────────────────────────────────────
+  function switchTab(tab) {
+    document.getElementById('tabUpload').classList.toggle('active', tab === 'upload');
+    document.getElementById('tabPaste').classList.toggle('active',  tab === 'paste');
+    document.getElementById('uploadZoneWrap').style.display = tab === 'upload' ? '' : 'none';
+    document.getElementById('pasteZone').classList.toggle('active', tab === 'paste');
+    selectedFile = null;
+    document.getElementById('fileInput').value = '';
+    document.getElementById('fileSelected').classList.remove('show');
+    hideError();
+  }
+
+  // ── File upload ───────────────────────────────────────────
+  const uploadZone = document.getElementById('uploadZone');
+  const fileInput  = document.getElementById('fileInput');
+  let selectedFile = null;
+
+  uploadZone.addEventListener('click', () => fileInput.click());
+  uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+  uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.classList.remove('drag-over'); if(e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
+  fileInput.addEventListener('change', () => { if(fileInput.files[0]) setFile(fileInput.files[0]); });
+
+  function setFile(f) {
+    if (!f.name.match(/\.(pdf|doc|docx|txt)$/i)) { showError('Please upload PDF, DOCX, DOC, or TXT.'); return; }
+    if (f.size > 5*1024*1024) { showError('File too large. Max 5MB.'); return; }
+    selectedFile = f;
+    document.getElementById('fileName').textContent = f.name;
+    document.getElementById('fileSelected').classList.add('show');
+    hideError();
+  }
+
+  document.getElementById('removeFile').addEventListener('click', () => {
+    selectedFile = null; fileInput.value = '';
+    document.getElementById('fileSelected').classList.remove('show');
+  });
+
+  // ── Analyze ───────────────────────────────────────────────
+  document.getElementById('analyzeBtn').addEventListener('click', async () => {
+    const isPaste  = document.getElementById('tabPaste').classList.contains('active');
+    const pasteVal = document.getElementById('resumeText').value.trim();
+    const jobDesc  = document.getElementById('jobDesc').value.trim();
+
+    if (!isPaste && !selectedFile) { showError('Please upload your resume file.'); return; }
+    if (isPaste  && !pasteVal)     { showError('Please paste your resume text.'); return; }
+
+    const btn = document.getElementById('analyzeBtn');
+    btn.classList.add('loading'); btn.disabled = true; hideError();
+
+    try {
+      const form = new FormData();
+      form.append('job_desc', jobDesc);
+
+      if (isPaste) {
+        form.append('resume_text', pasteVal);
+      } else {
+        form.append('resume', selectedFile);
+      }
+
+      const res  = await fetch('analyze.php', { method:'POST', body:form });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Analysis failed.');
+      renderResults(data);
+      loadHistory();
+    } catch(e) {
+      showError('Error: ' + e.message);
+    } finally {
+      btn.classList.remove('loading'); btn.disabled = false;
+    }
+  });
+
+  // ── Render results ────────────────────────────────────────
+  function renderResults(d) {
+    const results = document.getElementById('results');
+    results.classList.add('show');
+    results.scrollIntoView({ behavior:'smooth', block:'start' });
+
+    const score = d.score || 0;
+    const color = score >= 75 ? 'var(--success)' : score >= 50 ? 'var(--warning)' : 'var(--danger)';
+    const circle = document.getElementById('scoreCircle');
+    circle.style.stroke = color;
+
+    let cur = 0;
+    const timer = setInterval(() => {
+      cur = Math.min(cur + score/60, score);
+      document.getElementById('scoreNum').textContent = Math.round(cur);
+      if (cur >= score) clearInterval(timer);
+    }, 16);
+    setTimeout(() => { circle.style.strokeDashoffset = 408 - (score/100)*408; }, 100);
+
+    let grade, desc;
+    if      (score >= 85) { grade='🏆 Excellent'; desc='Highly ATS-optimized. Strong chance of passing automated screening.'; }
+    else if (score >= 70) { grade='✅ Good';       desc='Fairly well-optimized. A few tweaks can push it to the top.'; }
+    else if (score >= 50) { grade='⚠️ Average';    desc='Moderate ATS compatibility. Apply the suggestions below to improve.'; }
+    else                  { grade='❌ Needs Work'; desc='Low ATS compatibility. Your resume may be filtered out. Apply improvements below.'; }
+
+    document.getElementById('scoreGrade').textContent = grade;
+    document.getElementById('scoreDesc').textContent  = desc;
+    document.getElementById('scoreGrade').style.color = color;
+
+    document.getElementById('statKeywords').textContent = d.keywords_found?.length  || 0;
+    document.getElementById('statMissing').textContent  = d.keywords_missing?.length || 0;
+    document.getElementById('statSections').textContent = d.sections_found           || 0;
+
+    const bars = document.getElementById('sectionBars');
+    bars.innerHTML = '';
+    Object.entries(d.section_scores || {}).forEach(([name, val]) => {
+      const c = val >= 70 ? '#6fffc4' : val >= 40 ? '#ffcc6f' : '#ff6f6f';
+      bars.innerHTML += `<div class="score-bar-item">
+        <div class="score-bar-header"><span class="score-bar-name">${name}</span><span class="score-bar-val">${val}%</span></div>
+        <div class="score-bar-track"><div class="score-bar-fill" data-val="${val}" style="background:${c}"></div></div>
+      </div>`;
+    });
+    setTimeout(() => {
+      document.querySelectorAll('.score-bar-fill').forEach(el => { el.style.width = el.dataset.val + '%'; });
+    }, 200);
+
+    const kf = document.getElementById('keywordsFound');
+    const km = document.getElementById('keywordsMissing');
+    kf.innerHTML = (d.keywords_found  || []).map(k=>`<span class="tag found">${k}</span>`).join('') || '<span style="color:var(--muted);font-size:.84rem">None detected</span>';
+    km.innerHTML = (d.keywords_missing|| []).map(k=>`<span class="tag missing">${k}</span>`).join('') || '<span style="color:var(--muted);font-size:.84rem">All keywords present ✓</span>';
+
+    document.getElementById('improvementsList').innerHTML =
+      (d.improvements||[]).map((t,i)=>`<div class="improvement-item"><div class="imp-num">${i+1}</div><div class="imp-text">${t}</div></div>`).join('');
+  }
+
+  // ── History ───────────────────────────────────────────────
+  async function loadHistory() {
+    try {
+      const data = await (await fetch('history.php')).json();
+      const cont = document.getElementById('historyTable');
+      if (!data.length) { cont.innerHTML='<p style="color:var(--muted);font-size:.88rem">No history yet.</p>'; return; }
+      document.getElementById('historyCount').textContent = `(${data.length} records)`;
+      cont.innerHTML = `<table class="history-table">
+        <thead><tr><th>File</th><th>Score</th><th>Keywords</th><th>Date</th></tr></thead>
+        <tbody>${data.map(r=>{
+          const s=parseInt(r.score), pc=s>=70?'pill-high':s>=50?'pill-mid':'pill-low';
+          return `<tr><td>${r.filename}</td><td><span class="score-pill ${pc}">${r.score}%</span></td><td>${r.keywords_found||0}</td><td style="color:var(--muted)">${r.created_at}</td></tr>`;
+        }).join('')}</tbody></table>`;
+    } catch(e) {}
+  }
+
+  function showError(m) { const el=document.getElementById('errorMsg'); el.textContent=m; el.classList.add('show'); }
+  function hideError()  { document.getElementById('errorMsg').classList.remove('show'); }
+
+  loadHistory();
+</script>
+</body>
+</html>
